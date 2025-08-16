@@ -1,0 +1,41 @@
+const Booking = require('../models/Booking');
+const Event = require('../models/Event');
+
+exports.createBooking = async (req, res) => {
+  try {
+    const { event: eventId, numberOfTickets, ticketTier } = req.body;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({ success: false, error: 'Event not found' });
+    }
+
+    const tier = event.ticketTiers.find(t => t.name === ticketTier);
+    if (!tier) {
+      return res.status(400).json({ success: false, error: 'Invalid ticket tier' });
+    }
+
+    const totalPrice = tier.price * numberOfTickets;
+
+    // --- THIS IS THE FINAL FIX ---
+    // We create a new object with the correct field names for the database model.
+    const bookingData = {
+      event: eventId,
+      user: userId,
+      tickets: numberOfTickets, // Map 'numberOfTickets' from Postman to 'tickets' for the DB
+      ticketTier: ticketTier,
+      totalPrice: totalPrice,
+    };
+
+    const booking = await Booking.create(bookingData);
+
+    await Event.findByIdAndUpdate(eventId, { $addToSet: { attendees: userId } });
+
+    res.status(201).json({ success: true, data: booking });
+  } catch (error) {
+    console.error('Error creating booking:', error);
+    res.status(400).json({ success: false, error: error.message });
+  }
+};
